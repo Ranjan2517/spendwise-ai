@@ -1,0 +1,21 @@
+server:
+  port: 8761
+
+spring:
+  application:
+    name: discovery-server
+
+eureka:
+  client:
+    # This server shouldn't register itself as a client of itself
+    register-with-eureka: false
+    fetch-registry: false
+  server:
+    # Slightly faster eviction for local dev, so stale services disappear quicker
+    eviction-interval-timer-in-ms: 5000
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
