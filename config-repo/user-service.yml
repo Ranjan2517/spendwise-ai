@@ -37,3 +37,13 @@ management:
   endpoint:
     health:
       show-details: always
+      
+app:
+  jwt:
+    secret: "ReplaceThisWithALongRandomSecretKeyAtLeast256BitsForHS256Algorithm"
+    access-token-expiration-ms: 900000
+    refresh-token-expiration-ms: 604800000
+    
+    
+    
+    
