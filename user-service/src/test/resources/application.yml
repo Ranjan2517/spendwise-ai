@@ -1,0 +1,22 @@
+spring:
+  config:
+    import: "optional:configserver:"
+  cloud:
+    config:
+      enabled: false
+  jpa:
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+eureka:
+  client:
+    enabled: false
+
+app:
+  jwt:
+    secret: "TestOnlySecretKeyForIntegrationTestsAtLeast256BitsLongForHS256"
+    access-token-expiration-ms: 900000
+    refresh-token-expiration-ms: 604800000

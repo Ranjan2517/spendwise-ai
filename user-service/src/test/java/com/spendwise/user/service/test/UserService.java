@@ -115,4 +115,74 @@ class UserServiceTest {
     private String encodedPassword(String rawPassword) {
         return new org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder().encode(rawPassword);
     }
+    
+    @Test
+    void refresh_issuesNewTokens_whenRefreshTokenValid() {
+        UUID userId = UUID.randomUUID();
+        User user = new User("user@example.com", "hashed-password");
+
+        com.spendwise.user.entity.RefreshToken existingToken = new com.spendwise.user.entity.RefreshToken(
+                userId, "old-hash", "device", "127.0.0.1",
+                java.time.LocalDateTime.now().plusDays(1)
+        );
+
+        when(tokenHasher.hash("raw-refresh-token")).thenReturn("old-hash");
+        when(refreshTokenRepository.findByTokenHash("old-hash")).thenReturn(Optional.of(existingToken));
+        when(userRepository.findById(any())).thenReturn(Optional.of(user));
+        when(jwtService.generateAccessToken(any(), any(), any())).thenReturn("new-access-token");
+        when(jwtService.generateOpaqueRefreshToken()).thenReturn("new-raw-refresh-token");
+        when(tokenHasher.hash("new-raw-refresh-token")).thenReturn("new-hash");
+
+        var response = userService.refresh("raw-refresh-token", "device", "127.0.0.1");
+
+        assertThat(response.getAccessToken()).isEqualTo("new-access-token");
+        assertThat(response.getRefreshToken()).isEqualTo("new-raw-refresh-token");
+        assertThat(existingToken.isRevoked()).isTrue();
+        verify(refreshTokenRepository, times(2)).save(any());
+    }
+
+    @Test
+    void refresh_throwsInvalidRefreshToken_whenTokenNotFound() {
+        when(tokenHasher.hash("unknown-token")).thenReturn("unknown-hash");
+        when(refreshTokenRepository.findByTokenHash("unknown-hash")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> userService.refresh("unknown-token", "device", "127.0.0.1"))
+                .isInstanceOf(com.spendwise.user.exception.InvalidRefreshTokenException.class);
+    }
+
+    @Test
+    void refresh_throwsInvalidRefreshToken_whenTokenExpired() {
+        UUID userId = UUID.randomUUID();
+        com.spendwise.user.entity.RefreshToken expiredToken = new com.spendwise.user.entity.RefreshToken(
+                userId, "expired-hash", "device", "127.0.0.1",
+                java.time.LocalDateTime.now().minusDays(1)
+        );
+
+        when(tokenHasher.hash("expired-token")).thenReturn("expired-hash");
+        when(refreshTokenRepository.findByTokenHash("expired-hash")).thenReturn(Optional.of(expiredToken));
+
+        assertThatThrownBy(() -> userService.refresh("expired-token", "device", "127.0.0.1"))
+                .isInstanceOf(com.spendwise.user.exception.InvalidRefreshTokenException.class);
+    }
+
+    @Test
+    void refresh_revokesAllUserTokens_whenReusedTokenDetected() {
+        UUID userId = UUID.randomUUID();
+        com.spendwise.user.entity.RefreshToken revokedToken = new com.spendwise.user.entity.RefreshToken(
+                userId, "reused-hash", "device", "127.0.0.1",
+                java.time.LocalDateTime.now().plusDays(1)
+        );
+        revokedToken.revoke();
+
+        when(tokenHasher.hash("reused-token")).thenReturn("reused-hash");
+        when(refreshTokenRepository.findByTokenHash("reused-hash")).thenReturn(Optional.of(revokedToken));
+        when(refreshTokenRepository.findAllByUserIdAndRevokedFalse(userId)).thenReturn(java.util.List.of());
+
+        assertThatThrownBy(() -> userService.refresh("reused-token", "device", "127.0.0.1"))
+                .isInstanceOf(com.spendwise.user.exception.InvalidRefreshTokenException.class)
+                .hasMessageContaining("already been used");
+
+        verify(refreshTokenRepository).findAllByUserIdAndRevokedFalse(userId);
+    }
+    
 }
