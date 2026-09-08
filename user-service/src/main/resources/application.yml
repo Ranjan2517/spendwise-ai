@@ -1,6 +1,9 @@
+server:
+  port: 8081
+
 spring:
   application:
     name: user-service
 
   config:
-    import: "configserver:http://localhost:8888"
+    import: ${SPRING_CONFIG_IMPORT:configserver:http://localhost:8888}
